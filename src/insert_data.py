@@ -1,46 +1,17 @@
-from utils.DbConnector import DbConnector
+from utils.DbConnectorBatch import DbConnectorBatch
 from utils.dataset_utils import create_dfs
-
-def insert_user_df(df, connector):
-    insert_query = """
-        INSERT INTO User (id, has_label)
-        VALUES (%s, %s);
-    """
-    for _, row in df.iterrows():
-        connector.cursor.execute(insert_query, tuple(row))
-    
-    connector.db_connection.commit()
-
-def insert_activity_df(df, connector):
-    insert_query = """
-        INSERT INTO Activity (id, user_id, transportation_mode, start_date_time, end_date_time)
-        VALUES (%s, %s, %s, %s, %s);
-    """
-    for _, row in df.iterrows():
-        connector.cursor.execute(insert_query, tuple(row))
-    
-    connector.db_connection.commit()
-
-def insert_trackpoint_df(df, connector):
-    insert_query = """
-        INSERT INTO TrackPoint (id, activity_id, lat, lon, altitude, date_days, date_time)
-        VALUES (%s, %s, %s, %s, %s, %s, %s);
-    """
-    for _, row in df.iterrows():
-        connector.cursor.execute(insert_query, tuple(row))
-    
-    connector.db_connection.commit()
 
 def main():
     user_df, activity_df, trackpoint_df = create_dfs()
 
-    connector = DbConnector()
+    print(f"user_df shape: {user_df.shape}")
+    print(f"activity_df shape: {activity_df.shape}")
+    print(f"trackpoint_df shape: {trackpoint_df.shape}")
 
-    insert_user_df(user_df, connector)
-    insert_activity_df(activity_df, connector)
-    insert_trackpoint_df(trackpoint_df, connector)
+    batch_connector = DbConnectorBatch()
+    batch_connector.insert_dataframe(user_df, "User")
+    batch_connector.insert_dataframe(activity_df, "Activity")
+    batch_connector.insert_dataframe(trackpoint_df, "TrackPoint", 10_000)
 
-    connector.close_connection()
-
-if __name__ == "__main__.py":
+if __name__ == "__main__":
     main()

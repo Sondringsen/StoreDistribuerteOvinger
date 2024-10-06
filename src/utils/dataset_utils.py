@@ -21,6 +21,16 @@ def create_user_ids():
 
     return np.array(user_ids)
 
+def create_transportation_list(transportation_list):
+    possible_transportation_modes = ["walk", "bike", "bus", "taxi", "car", "subway", "train", "airplane", "boat", "run", "motorcycle"]
+    binary_list = []
+
+    for possible_transportation in possible_transportation_modes:
+        if possible_transportation in transportation_list:
+            binary_list.append(1)
+        else:
+            binary_list.append(0)
+    return binary_list
 
 def create_dfs():
     labeled_ids = get_labeled_users()
@@ -30,13 +40,15 @@ def create_dfs():
     user_df.loc[:, "id"] = all_user_ids
     user_df.loc[:, "has_labels"] = np.isin(all_user_ids, labeled_ids).astype(int)
 
-    activity_df = pd.DataFrame(columns=["id", "user_id", "transportation_mode", "start_date_time", "end_date_time"])
+    activity_df = pd.DataFrame(columns=["id", "user_id", "walk", "bike", "bus", "taxi", "car", "subway", "train", "airplane", "boat", "run", "motorcycle", "start_date_time", "end_date_time"])
     trackpoint_df = pd.DataFrame(columns=["activity_id", "lat", "lon", "altitude", "date_days", "date_time"])
 
+    
     activity_id = 0
     for user_id in all_user_ids:
-        if user_id == "010":
-            break
+        # if user_id != "010" and user_id != "001":
+        #     continue
+        print(f"Currently extracting data on user {user_id}")
         directory = f"dataset/dataset/Data/{user_id}/Trajectory"
         if user_id in labeled_ids:
             labeled_id = True
@@ -69,26 +81,41 @@ def create_dfs():
             activity_start_time = df["date_time"].min()
             activity_end_time = df["date_time"].max()
             
+            # if labeled_id:
+            #     transportation_mode = labeled_df.loc[(labeled_df.loc[:, "start_time"] >= activity_start_time) & (labeled_df.loc[: , "end_time"] <= activity_end_time), "transportation_mode"]
+            #     if transportation_mode.shape[0] == 0:
+            #         transportation_mode = np.nan
+            #     else:
+            #         print(transportation_mode)
+            #         transportation_mode = create_transportation_list(transportation_mode)
+            #         print(transportation_mode)
+            # else:
+            #     transportation_mode = create_transportation_list(transportation_mode)
+            
+            # TODO: what to do when there are multiple transportation methods during the same activity
+            # TODO: check illegal activity reporting? How many are there? Is it something wrong with the code?
             if labeled_id:
-                # TODO: what to do when there are multiple transportation methods during the same activity
-                # TODO: check illegal activity reporting? How many are there? Is it something wrong with the code?
                 transportation_mode = labeled_df.loc[(labeled_df.loc[:, "start_time"] >= activity_start_time) & (labeled_df.loc[: , "end_time"] <= activity_end_time), "transportation_mode"]
-                if transportation_mode.shape[0] == 0:
-                    transportation_mode = np.nan
-                else:
-                    transportation_mode = ",".join(transportation_mode.tolist())
+                transportation_mode = transportation_mode.to_list()
             else:
-                transportation_mode = np.nan
+                transportation_mode = []
+            transportation_mode = create_transportation_list(transportation_mode)
 
-            activity_row = [[activity_id, user_id, transportation_mode, activity_start_time, activity_end_time]]
-            activity_row = pd.DataFrame(columns=["id", "user_id", "transportation_mode", "start_date_time", "end_date_time"], data=activity_row)
+            activity_row = [[activity_id, user_id, *transportation_mode, activity_start_time, activity_end_time]]
+            activity_row = pd.DataFrame(columns=["id", "user_id", "walk", "bike", "bus", "taxi", "car", "subway", "train", "airplane", "boat", "run", "motorcycle", "start_date_time", "end_date_time"], data=activity_row)
             activity_df = pd.concat([activity_df, activity_row], ignore_index=True)
 
             trackpoint_df = pd.concat([trackpoint_df, df], ignore_index=True)
 
+    # activity_df["start_date_time"] = pd.to_datetime(activity_df["start_date_time"], format="%Y:%m:%d %H:%M:%S")
+    # activity_df["end_date_time"] = pd.to_datetime(activity_df["end_date_time"], format="%Y:%m:%d %H:%M:%S")
 
     return user_df, activity_df, trackpoint_df
 
     
 if __name__ == "__main__":
-    create_dfs()
+    user_df, activity_df, trackpoint_df = create_dfs()
+    # print(user_df)
+    print(activity_df)
+    print(activity_df.dtypes)
+    # print(trackpoint_df)

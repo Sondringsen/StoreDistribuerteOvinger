@@ -27,7 +27,17 @@ def create_activity_table(connector):
         CREATE TABLE IF NOT EXISTS Activity (
             id SMALLINT UNSIGNED AUTO_INCREMENT NOT NULL PRIMARY KEY,
             user_id VARCHAR(4),
-            transportation_mode VARCHAR(30),
+            walk BIT(1),
+            bike BIT(1),
+            bus BIT(1),
+            taxi BIT(1),
+            car BIT(1),
+            subway BIT(1),
+            train BIT(1),
+            airplane BIT(1),
+            boat BIT(1),
+            run BIT(1),
+            motorcycle BIT(1),
             start_date_time DATETIME,
             end_date_time DATETIME,
             CONSTRAINT f_key1 FOREIGN KEY (user_id) REFERENCES User(id) ON DELETE CASCADE
