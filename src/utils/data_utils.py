@@ -6,38 +6,45 @@ from haversine import haversine, Unit
 from datetime import timedelta, datetime
 
 def calculate_distance(df):
-    distances = []
-    for i in range(len(df)-1):
-        distance = haversine((df.iloc[i, 0], df.iloc[i, 1]), (df.iloc[i + 1, 0], df.iloc[i + 1, 1]), unit=Unit.KILOMETERS)
-        distances.append(distance)
-
-    distances.append(0)
-    df["distance"] = distances
+    def subfunction(sub_df):
+        distances = []
+        for i in range(len(sub_df)-1):
+            distance = haversine((sub_df.iloc[i, 0], sub_df.iloc[i, 1]), (sub_df.iloc[i + 1, 0], sub_df.iloc[i + 1, 1]), unit=Unit.KILOMETERS)
+            distances.append(distance)
+        distances.append(0)
+        distances = np.array(distances)
+        distances = np.where(distances<=10, distances, 0)
+        return np.sum(distances)
+    df = df.groupby(by="activity_id").apply(subfunction).reset_index()
+    df = df.rename(columns={0: "distance"})
     return df
 
 def calculate_altitudes(df):
     def sub_function(alt_series):
+        alts = alt_series[(alt_series >= -300) & (alt_series <= 50_000)]
         alts = (alt_series - alt_series.shift()).dropna()
-        alts = np.where(alts > 0, alts, 0)
+        alts = np.where((alts > 0) & (alts <= 300), alts, 0)
         return np.sum(alts)
 
-    df = df.groupby(by="user_id").apply(sub_function)
+    df = df.groupby(by=["user_id", "activity_id"]).apply(sub_function)
+    df = df.groupby(by=["user_id"]).apply("sum")
     return df
 
 def calculate_invalid(df):
     def sub_function(activity_series):
+        # activity_series = activity_series["date_time"]
         activity_series = pd.to_datetime(activity_series, format="%Y:%m:%d %H:%M:%S")
         activity_series = activity_series.diff().dropna()
         if (activity_series > timedelta(minutes=5)).any():
             return 1
         else:
             return 0
+        
+    df = df.groupby(by=["user_id", "activity_id"])["date_time"].apply(sub_function).reset_index()
+    df = df.rename(columns={"date_time": "invalid"})
 
-    df['invalid'] = df.groupby(by='activity_id')["date_time"].transform(sub_function)
-    df['invalid'] = df.groupby(['user_id', 'invalid'])['invalid'].transform('max')
-
-    invalid_activity_counts = df.groupby('user_id')['activity_id'].nunique().reset_index()
-    invalid_activity_counts.columns = ['user_id', 'invalid_activity_count']
+    invalid_activity_counts = df.groupby("user_id")["invalid"].apply("sum").reset_index()
+    invalid_activity_counts.columns = ["user_id", "invalid_activity_count"]
 
     return invalid_activity_counts
 
@@ -132,18 +139,9 @@ def create_dfs():
             activity_start_time_tp = df["date_time"].min()
             activity_end_time_tp = df["date_time"].max()
 
-            # Adding some slack for the start and end time for an activity
-            legal_start_time = datetime.strptime(activity_start_time_tp, "%Y:%m:%d %H:%M:%S") - timedelta(minutes=5)
-            legal_end_time = datetime.strptime(activity_end_time_tp, "%Y:%m:%d %H:%M:%S") + timedelta(minutes=5)
-            legal_start_time = datetime.strftime(legal_start_time, "%Y:%m:%d %H:%M:%S")
-            legal_end_time = datetime.strftime(legal_end_time, "%Y:%m:%d %H:%M:%S")
-            
-            # TODO: what to do when there are multiple transportation methods during the same activity
-            # TODO: check illegal activity reporting? How many are there? Is it something wrong with the code?
-
             # Finding which transportation modes apply to an activity (possibly many) and a trackpoint (only one)
             if labeled_id:
-                transportation_mode_df = labeled_df.loc[(labeled_df.loc[:, "start_time"] >= legal_start_time) & (labeled_df.loc[: , "end_time"] <= legal_end_time), :]
+                transportation_mode_df = labeled_df.loc[(labeled_df.loc[:, "start_time"] >= activity_start_time_tp) & (labeled_df.loc[: , "end_time"] <= activity_end_time_tp), :]
                 labeled_df = labeled_df.drop(index=transportation_mode_df.index) # removing valid activities from the labeled df, so we can deal with invalid activities later
                 df = add_transportation_mode_tp(df, transportation_mode_df)
                 transportation_mode = transportation_mode_df["transportation_mode"].to_list()
