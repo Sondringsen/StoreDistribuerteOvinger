@@ -136,6 +136,10 @@ def create_dfs():
 
             df["activity_id"] = activity_id
 
+            df = df.loc[(df.loc[:, "lat"] <= 90) & (df.loc[:, "lat"] >= -90), :]
+            df = df.loc[(df.loc[:, "lon"] <= 180) & (df.loc[:, "lon"] >= -180), :]
+            df = df.loc[((df.loc[:, "altitude"] >= -300) & (df.loc[:, "altitude"] <= 50_000)) | (df.loc[:, "altitude"] == -777), :]
+
             activity_start_time_tp = df["date_time"].min()
             activity_end_time_tp = df["date_time"].max()
 

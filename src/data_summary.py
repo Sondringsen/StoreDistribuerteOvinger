@@ -61,6 +61,7 @@ def query3(connector):
     query = f"""
         SELECT user_id, COUNT(id) AS activity_count 
         FROM Activity
+        WHERE valid_activity=1
         GROUP BY user_id
         ORDER BY activity_count DESC
         LIMIT 20;
@@ -76,7 +77,7 @@ def query4(connector):
         SELECT DISTINCT user.id 
         FROM User as user RIGHT JOIN Activity as activity
         ON user.id = activity.user_id
-        WHERE taxi = 1;
+        WHERE taxi = 1 AND valid_activity=1;
     """
     connector.cursor.execute(query)
     result = connector.cursor.fetchall()
@@ -98,7 +99,8 @@ def query5(connector):
             SUM(boat) AS boat,
             SUM(run) AS run,
             SUM(motorcycle) AS motorcycle
-        FROM Activity;
+        FROM Activity
+        WHERE valid_activity=1;
     """
     connector.cursor.execute(query)
     result = connector.cursor.fetchall()
@@ -112,6 +114,7 @@ def query6a(connector):
     query = f"""
         SELECT YEAR(start_date_time) as year, COUNT(id) AS activity_count
         FROM Activity
+        WHERE valid_activity=1
         GROUP BY YEAR(start_date_time)
         ORDER BY activity_count DESC;
     """
@@ -125,6 +128,7 @@ def query6b(connector):
     query = f"""
         SELECT YEAR(start_date_time) as year, SUM(TIMESTAMPDIFF(second, start_date_time, end_date_time) / 3600) AS time_spent
         FROM Activity
+        WHERE valid_activity=1
         GROUP BY YEAR(start_date_time)
         ORDER BY time_spent DESC;
     """
@@ -205,7 +209,7 @@ def query11(connector):
             SUM(run) AS run,
             SUM(motorcycle) AS motorcycle
         FROM User AS u LEFT JOIN Activity AS a ON u.id = a.user_id
-        WHERE u.has_labels = 1
+        WHERE u.has_labels = 1 AND a.valid_activity=1
         GROUP BY u.id
     """
     connector.cursor.execute(query)
@@ -213,10 +217,47 @@ def query11(connector):
     columns = [desc[0] for desc in connector.cursor.description]
     df = pd.DataFrame(columns=columns, data=result)
     df = df.set_index("id")
+    print(df)
     df = df.idxmax(axis=1)
     print("Users most used transportation mode")
     print(df)
     
+
+def test_query(connector):
+    query = """
+        SELECT DISTINCT activity_id 
+        FROM TrackPoint
+        WHERE YEAR(date_time) = 2000;
+    """
+    connector.cursor.execute(query)
+    result = connector.cursor.fetchall()
+    headers = [description[0] for description in connector.cursor.description]
+    print(tabulate(result, headers))
+
+def test_query2(connector):
+    query = """
+        SELECT activity_id, date_time, lat, lon, altitude
+        FROM TrackPoint
+        WHERE activity_id = 190
+        LIMIT 10
+    """
+    connector.cursor.execute(query)
+    result = connector.cursor.fetchall()
+    headers = [description[0] for description in connector.cursor.description]
+    print(tabulate(result, headers))
+
+
+
+def test_query3(connector):
+    query = """
+        SELECT COUNT(id) as count_activity
+        FROM Activity
+        WHERE valid_activity = 1
+    """
+    connector.cursor.execute(query)
+    result = connector.cursor.fetchall()
+    headers = [description[0] for description in connector.cursor.description]
+    print(tabulate(result, headers))
 
 def main():
     connector = DbConnector()
@@ -245,11 +286,14 @@ def main():
     # print()
     # query8(connector)
     # print()
-    query9(connector) 
-    print()
-    query10(connector)
-    print()
+    # query9(connector) 
+    # print()
+    # query10(connector)
+    # print()
     query11(connector)
+    # test_query(connector)
+    # test_query2(connector)
+    # test_query3(connector)
 
 
     connector.close_connection()
