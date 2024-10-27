@@ -95,12 +95,14 @@ def create_doc_lists():
     user_df = pd.DataFrame(columns=["_id", "has_labels"])
     user_df.loc[:, "_id"] = all_user_ids
     user_df.loc[:, "has_labels"] = np.isin(all_user_ids, labeled_ids).astype(int)
+    user_docs = user_df.to_dict("records")
+
 
     activity_df = pd.DataFrame(columns=["_id", "user_id", "walk", "bike", "bus", "taxi", "car", "subway", "train", "airplane", "boat", "run", "motorcycle", "valid_activity", "start_date_time", "end_date_time"])
     trackpoint_df = pd.DataFrame(columns=["activity_id", "lat", "lon", "altitude", "transportation_mode", "date_days", "date_time"])
 
     activity_id = 0
-    for user_id in all_user_ids:
+    for user_num, user_id in enumerate(all_user_ids):
         if user_id != "010" and user_id != "001":
             continue
         print(f"Currently extracting data on user {user_id}")
@@ -119,6 +121,7 @@ def create_doc_lists():
         else:
             labeled_id = False
 
+        activity_ids_to_user = []
         # Looping through all the activities for a user
         for file in os.listdir(directory):
             df = pd.read_csv(join(directory, file), skiprows=6, header=None)
@@ -126,6 +129,7 @@ def create_doc_lists():
                 continue
             else:
                 activity_id += 1
+                activity_ids_to_user.append(activity_id)
             df = df.set_axis(["lat", "lon", "field3", "altitude", "date_days", "date_time1", "date_time2"], axis = 1)
             
             df["date_time"] = df["date_time1"] + ' ' + df["date_time2"]
@@ -165,12 +169,15 @@ def create_doc_lists():
         if labeled_id:
             for _, invalid_activity in labeled_df.iterrows():
                 activity_id += 1
+                activity_ids_to_user.append(activity_id)
                 transportation_mode = create_transportation_list([invalid_activity["transportation_mode"]])
                 activity_row = [[activity_id, user_id, *transportation_mode, 0, invalid_activity["start_time"], invalid_activity["end_time"]]]
                 activity_row = pd.DataFrame(columns=["_id", "user_id", "walk", "bike", "bus", "taxi", "car", "subway", "train", "airplane", "boat", "run", "motorcycle", "valid_activity", "start_date_time", "end_date_time"], data=activity_row)
                 activity_df = pd.concat([activity_df, activity_row], ignore_index=True)
 
-    return user_df.to_dict("records"), activity_df.to_dict("records"), trackpoint_df.to_dict("records")
+        # Add reference to activities for users
+        user_docs[user_num]["activities"] = activity_ids_to_user
+    return user_docs, activity_df.to_dict("records"), trackpoint_df.to_dict("records")
 
     
 if __name__ == "__main__":
