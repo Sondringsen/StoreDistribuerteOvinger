@@ -103,8 +103,8 @@ def create_doc_lists():
 
     activity_id = 0
     for user_num, user_id in enumerate(all_user_ids):
-        if user_id != "010" and user_id != "001":
-            continue
+        # if user_id != "010" and user_id != "001":
+        #     continue
         print(f"Currently extracting data on user {user_id}")
         directory = f"dataset/dataset/Data/{user_id}/Trajectory"
 
