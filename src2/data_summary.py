@@ -30,13 +30,17 @@ def table3(db):
 def query1(db):
     for collection_name in ["User", "Activity", "TrackPoint"]:
         collection = db[collection_name]
-        count = collection.count_documents({})
+        if collection_name == "Activity":
+            count = collection.count_documents({"valid_activity": 1})
+        else:  
+            count = collection.count_documents({})
         print(f"Collection {collection_name} has {count} documents")
 
 
 def query2(db):
     collection = db["Activity"]
     pipeline = [
+        {"$match": {"valid_activity": 1}},
         {"$group": {"_id": "$user_id", "activity_count": {"$count": {}}}},
         {"$group": {"_id": 0, "avg_activity_count": {"$avg": "$activity_count"}}}
     ]
@@ -98,7 +102,39 @@ def query6a(db):
     collection = db["Activity"]
     pipeline = [
         {"$match": {"valid_activity": 1}},
-        {"$project": {"year": {"$year": {"$dateFromString": {"dateString": "$start_date_time", "format": "%Y:%m:%d %H:%M:%S"}}}}},
+        {
+        "$project": {
+            "start_date_time": {
+                "$cond": {
+                    "if": {"$and": [
+                        {"$ne": ["$start_date_time", None]},
+                        {"$eq": [{"$type": "$start_date_time"}, "string"]}
+                        ]},
+                        "then": "$start_date_time",
+                        "else": None
+                    }
+                }
+            }
+        },
+        {
+        "$project": {
+            "year": {
+                "$cond": {
+                    "if": {"$ne": ["$start_date_time", None]},
+                    "then": {
+                        "$year": {
+                            "$dateFromString": {
+                                "dateString": "$start_date_time",
+                                "format": "%Y:%m:%d %H:%M:%S"
+                                }
+                            }
+                        },
+                    "else": None
+                    }
+                }
+            }
+        },
+        {"$match": {"year": {"$ne": None}}},
         {"$group": {"_id": "$year", "activity_count": {"$count": {}}}},
         {"$sort": {"activity_count": -1}},
     ]
@@ -113,12 +149,51 @@ def query6b(db):
     collection = db["Activity"]
     pipeline = [
         {"$match": {"valid_activity": 1}},
-        {"$project": {
-            "year": {"$year": {"$dateFromString": {"dateString": "$start_date_time", "format": "%Y:%m:%d %H:%M:%S"}}}, 
+        {
+        "$project": {
+            "start_date_time": {
+                "$cond": {
+                    "if": {"$and": [
+                        {"$ne": ["$start_date_time", None]},
+                        {"$eq": [{"$type": "$start_date_time"}, "string"]}
+                        ]},
+                        "then": "$start_date_time",
+                        "else": None
+                    }
+                },
+            "end_date_time": {
+                "$cond": {
+                    "if": {"$and": [
+                        {"$ne": ["$end_date_time", None]},
+                        {"$eq": [{"$type": "$end_date_time"}, "string"]}
+                        ]},
+                        "then": "$end_date_time",
+                        "else": None
+                    }
+                },
+            }
+        },
+        {
+        "$project": {
+            "year": {
+                "$cond": {
+                    "if": {"$ne": ["$start_date_time", None]},
+                    "then": {
+                        "$year": {
+                            "$dateFromString": {
+                                "dateString": "$start_date_time",
+                                "format": "%Y:%m:%d %H:%M:%S"
+                                }
+                            }
+                        },
+                    "else": None
+                    }
+                },
             "start_date_time": {"$toDate": "$start_date_time"}, 
             "end_date_time": {"$toDate": "$end_date_time"}
             }
         },
+        {"$match": {"year": {"$ne": None}}},
         {"$group": {"_id": "$year", "time_spent": {"$sum": {"$divide": [{"$subtract": ["$end_date_time", "$start_date_time"]}, 3600*1000]}}}},
         {"$sort": {"time_spent": -1}},
     ]
@@ -144,7 +219,7 @@ def query7(db):
     result = list(collection.aggregate(pipeline))
 
     collection = db["User"]
-    user_activities = list(collection.find({"_id": "010"}, {"activities": 1}))[0]["activities"]
+    user_activities = list(collection.find({"_id": "112"}, {"activities": 1}))[0]["activities"]
 
     df = pd.DataFrame(result)
     df = df[["lat", "lon", "activity_id"]]
@@ -191,7 +266,7 @@ def query9(db):
 
 def query10(db):
     collection = db["TrackPoint"]
-    result_tp = list(collection.find({"lat": {"$gt": 39.915, "$lt": 39.917}, "lon": {"$gt": 116.396, "$lt": 116.398}}, {"activity_id": 1}))
+    result_tp = list(collection.find({"lat": {"$gt": 39.915, "$lt": 39.917}, "lon": {"$gt": 116.396, "$lt": 116.398}}, {"_id": 0, "activity_id": 1}))
     df_tp = pd.DataFrame(result_tp)
 
     collection = db["Activity"]
@@ -199,7 +274,7 @@ def query10(db):
     df_act = pd.DataFrame(result_act)
 
     df = pd.merge(df_tp, df_act, how="left", left_on="activity_id", right_on="_id")
-    df = df.drop(columns=["_id", "ativity_id"])
+    df = df.drop(columns=["_id", "activity_id"])
     df = df.drop_duplicates(subset=["user_id"])
 
     print("Users who have registered activities in the Forbidden City")
@@ -213,6 +288,7 @@ def query11(db):
 
     collection = db["Activity"]
     results_act = list(collection.find({"valid_activity": 1}, {"start_date_time": 0, "end_date_time": 0, "valid_activity": 0, "_id": 0}))
+    # results_act = list(collection.find({}, {"start_date_time": 0, "end_date_time": 0, "valid_activity": 0, "_id": 0}))
     df_act = pd.DataFrame(results_act)
 
     df = df_act[df_act["user_id"].isin(df_user["_id"])]
@@ -263,16 +339,16 @@ def main():
     connector = DbConnector()
     db = connector.db
     
-    table1(db)
-    print()
-    table2(db)
-    print()
-    table3(db)
-    print()
+    # table1(db)
+    # print()
+    # table2(db)
+    # print()
+    # table3(db)
+    # print()
     query1(db)
-    # print()
-    # query2(db)
-    # print()
+    print()
+    query2(db)
+    print()
     # query3(db)
     # print()
     # query4(db)
